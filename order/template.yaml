@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Adidas
+
+Resources:
+  SqsQueue:
+    Type: AWS::SQS::Queue
+
+  AdidasProducer:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/producer
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.13
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          URL_QUEUE: !Ref SqsQueue
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt SqsQueue.QueueName
+      Events:
+        AdidasApi:
+          Type: Api
+          Properties:
+            Path: /pedido
+            Method: post
+  AdidasConsumer:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/consumer
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.13
+      Architectures:
+        - x86_64
+      Events:
+        SqsQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt SqsQueue.Arn
+            BatchSize: 10
