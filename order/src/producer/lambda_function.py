@@ -8,7 +8,7 @@ import requests
 URL_QUEUE = os.environ.get("URL_QUEUE")
 
 def lambda_handler(event, context):
-    URL_INFRAESTRUTURA = "https://2xnyepggle.execute-api.us-east-1.amazonaws.com/v1"
+    URL_INFRAESTRUTURA = "https://z97txngoub.execute-api.us-east-1.amazonaws.com/v1"
     client_sqs = boto3.client('sqs')
 
     dynamodb = boto3.resource('dynamodb')
