@@ -1,0 +1,10 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "nathan-adidas"
+resolve_s3 = false
+s3_bucket = "nathan-oliveira-bucket"
+s3_prefix = "nathan-adidas"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = []

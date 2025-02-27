@@ -1,0 +1,6 @@
+json
+boto3
+uuid
+datetime
+os
+requests
