@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Adidas
+
+Resources:
+  SqsQueue:
+    Type: AWS::SQS::Queue
+
+  AdidasCreateShipping:
+      Type: AWS::Serverless::Function
+      Properties:
+        CodeUri: src/create-shipping
+        Handler: lambda_function.lambda_handler
+        Runtime: python3.13
+        Architectures:
+          - x86_64
+        Environment:
+          Variables:
+            SQS_QUEUE_URL: !Ref SqsQueue
+        Policies:
+          - SQSSendMessagePolicy:
+              QueueName: !GetAtt SqsQueue.QueueName
+        Events:
+          AdidasCreateShippingApi:
+            Type: Api
+            Properties:
+              Path: /transportadora
+              Method: post
+
+  AdidasEndsShipping:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/ends-shipping
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.13
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          SQS_QUEUE_URL: !Ref SqsQueue
+          UPDATE_PRODUCT_URL: "https://2xnyepggle.execute-api.us-east-1.amazonaws.com/v1"
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt SqsQueue.QueueName
+      Events:
+        SqsQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt SqsQueue.Arn
+            BatchSize: 10
