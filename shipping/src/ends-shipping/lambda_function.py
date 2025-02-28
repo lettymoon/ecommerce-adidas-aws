@@ -41,7 +41,7 @@ def lambda_handler(event, context):
         except Exception as e:
             raise Exception(f"Erro ao salvar dado no bucket: {str(e)}")
 
-        #print(f"Dado salvo no bucket: {s3_file_name}")
+        print(f"Dado salvo no bucket com sucesso")
             
             
         #step 3: update (patch) da quantidade de produtos na API PRODUTO
@@ -49,15 +49,18 @@ def lambda_handler(event, context):
             id_produto = produto["id_produto"]
             quantidade = produto["quantidade"]
 
-            patch_url = f"{UPDATE_PRODUCT_URL}/estoque/{id_produto}"
-            patch_payload = {"quantidade": quantidade}
+            patch_url = f"{UPDATE_PRODUCT_URL}/estoque/{str(id_produto)}"
 
-            response_patch = requests.patch(patch_url, json=str(json.dumps(patch_payload)))
+            body = {
+                "quantidade": quantidade
+            }
 
-            #to-do: refletir sobre erros que podem ocorrer na requisição patch
+            response_patch = requests.patch(patch_url, json=body)
+
             if response_patch.status_code != 200:
-                raise Exception ("Falha ao atualizar")
-            
+                print("Falha ao atualizar estoque do produto: ", {id_produto})
+            else:
+                print("Estoque do produto atualizado com sucesso")
 
         return {
             "statusCode": 200,
