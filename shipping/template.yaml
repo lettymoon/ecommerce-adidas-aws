@@ -39,7 +39,7 @@ Resources:
       Environment:
         Variables:
           SQS_QUEUE_URL: !Ref SqsQueue
-          UPDATE_PRODUCT_URL: "https://2xnyepggle.execute-api.us-east-1.amazonaws.com/v1"
+          UPDATE_PRODUCT_URL: "https://z97txngoub.execute-api.us-east-1.amazonaws.com/v1"
       Policies:
         - SQSSendMessagePolicy:
             QueueName: !GetAtt SqsQueue.QueueName
