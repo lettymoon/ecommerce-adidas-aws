@@ -1,73 +1,271 @@
-<h1 align="center" style="font-weight: bold;"> Adidas SAM - AWS Project </h1>
-# AWS Serverless E-Commerce System
+<h1 align="center" style="font-weight: bold;"> Projeto AWS - Endpoints de Pedido e Transportadora </h1>
 
-[PYTHON_BADGE]:https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54 
-[AWS_BADGE]:https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge&logo=amazon-aws&logoColor=white
-[LICENSE_BADGE]: https://img.shields.io/github/license/Ileriayo/markdown-badges?style=for-the-badge
+## Descrição Geral
+O sistema possui dois endpoints principais: **Endpoint de Pedido** e **Endpoint de Transportadora**. O objetivo é garantir que o pedido seja processado desde a solicitação até a entrega. O fluxo inclui interação com APIs externas, armazenamento de dados em **DynamoDB** e **S3**, e uso de **SQS** para processamento assíncrono.
 
-![python][PYTHON_BADGE]
-![aws][AWS_BADGE]
-![license][LICENSE_BADGE]
+---
 
-## Visão Geral
+## ENDPOINT - Pedido
 
-Este projeto implementa um sistema de e-commerce baseado em uma arquitetura serverless utilizando serviços da AWS. Ele gerencia produtos, pedidos e envios.
+### Descrição
+Este endpoint é responsável por receber uma solicitação de pedido via API (POST), processar as informações recebidas, interagir com a API de produtos para recuperar os detalhes dos itens, armazenar os dados no **DynamoDB** e gerar uma mensagem para uma fila **SQS**. Além disso, ele interage com a transportadora para garantir que o pedido seja processado para entrega.
 
-## Arquitetura
+### Método: `POST`
+**URL:** `/pedido`
 
-O sistema é dividido em três principais funcionalidades:
+### Payload de Entrada:
+O payload enviado para o endpoint contém as informações sobre os produtos e a URL da transportadora:
 
-- Gerenciamento de Produtos (CRUD de produtos armazenados em um banco relacional).
+```json
+{
+  "produtos": [
+    {
+      "id_produto": "number",
+      "quantidade": "number"
+    },
+    {
+      "id_produto": "number",
+      "quantidade": "number"
+    }
+  ],
+  "url_transportadora": "string"
+}
+```
 
-- Processamento de Pedidos (Armazena e processa pedidos utilizando DynamoDB e filas SQS).
+#### Campos:
 
-- Gestão de Envios (Registra informações de envio e finaliza as entregas).
+- **produtos**: Lista de objetos, cada um representando um produto no pedido.
+  - **id_produto**: Identificador único do produto.
+  - **quantidade**: Quantidade solicitada para o produto.
 
-# Fluxo do Sistema
+- **url_transportadora**: URL da API da transportadora para onde os dados de transporte serão enviados.
 
-1. Produto
+### Fluxo de Processamento:
 
-O API Gateway recebe requisições HTTP para gerenciamento de produtos.
+1. **Recuperação de Dados dos Produtos**:
+   Após o recebimento do pedido, a aplicação realiza uma requisição `GET` à API de Produtos para recuperar o nome de cada produto. A URL da API de produtos segue o formato:
 
-As requisições são tratadas por um serviço ECS rodando Spring Boot.
+   ```
+   http://url.com/{id_produto}
+   ```
 
-O serviço se comunica com um banco RDS MySQL para armazenar os produtos.
+   Exemplo de retorno da API de Produto:
 
-2. Pedido
+   ```json
+   {
+     "id_produto": "string",
+     "nome_produto": "string"
+   }
+   ```
 
-Um API Gateway recebe solicitações de criação de pedidos.
+2. **Armazenamento no DynamoDB**:
+   Os dados dos produtos e do pedido são armazenados no **DynamoDB** com a seguinte estrutura de colunas:
 
-Um AWS Lambda (Python) processa os pedidos e os armazena no DynamoDB.
+### Estrutura de Armazenamento no DynamoDB
 
-O pedido é enviado para uma fila SQS Orders.
+| **Coluna**              | **Descrição**                                                                 |
+|-------------------------|-------------------------------------------------------------------------------|
+| **Id**                  | Identificador único para cada produto dentro de um pedido (string).          |
+| **id_pedido**           | Identificador único do pedido (comum a todos os produtos de um mesmo pedido). |
+| **data_pedido**         | Data e hora em que o pedido foi realizado.                                   |
+| **id_produto**          | Identificador do produto.                                                   |
+| **nome_loja**           | Nome da loja que registrou o pedido.                                         |
+| **nome_produto**        | Nome do produto obtido da API de produtos.                                   |
+| **quantidade**          | Quantidade solicitada para o produto.                                        |
+| **url_transportadora**  | URL da transportadora associada ao pedido.                                   |
 
-Outro AWS Lambda consome a fila e envia os dados do pedido para o S3.
+#### Exemplo de Registro no DynamoDB
 
-3. Envio
+| **Id**       | **id_pedido** | **data_pedido**         | **id_produto** | **nome_loja** | **nome_produto** | **quantidade** | **url_transportadora**  |
+|--------------|---------------|-------------------------|----------------|---------------|------------------|----------------|-------------------------|
+| `001`        | `pedido_123`  | `2025-02-28T15:30:00Z`  | `101`          | `Minha Loja`  | `Produto A`      | `2`            | `http://transp.com/api` |
+| `002`        | `pedido_123`  | `2025-02-28T15:30:00Z`  | `102`          | `Minha Loja`  | `Produto B`      | `1`            | `http://transp.com/api` |
 
-Um API Gateway recebe requisições para criar e finalizar envios.
+3. **Fila SQS**:
+   Após o armazenamento no DynamoDB, uma mensagem é enviada para a fila SQS com os dados do pedido no seguinte formato:
 
-Um AWS Lambda (Python) registra o envio no DynamoDB Shipping.
+   ```json
+   {
+     "produtos": [
+       {
+         "id_produto": "number",
+         "quantidade": "number"
+       },
+       {
+         "id_produto": "number",
+         "quantidade": "number"
+       }
+     ],
+     "url_transportadora": "string"
+   }
+   ```
 
-O envio é colocado na fila SQS Shipping.
+   Essa mensagem será processada por uma Lambda para interagir com a transportadora.
 
-Outro AWS Lambda finaliza o envio e registra os dados no S3.
+4. **Requisição para a Transportadora**:
+   A Lambda que processa a fila SQS envia uma requisição para a URL da transportadora especificada no payload, no seguinte formato:
 
-## Tecnologias Utilizadas
+   ```json
+   {
+     "produtos": [
+       {
+         "id_produto": "number",
+         "quantidade": "number"
+       },
+       {
+         "id_produto": "number",
+         "quantidade": "number"
+       }
+     ],
+     "nome_loja": "string"
+   }
+   ```
 
-API Gateway - Interface HTTP para interagir com o sistema.
+5. **Armazenamento no S3**:
+   Após o envio da requisição à transportadora, os dados do pedido e informações de envio são salvos em um arquivo JSON no **Amazon S3**. O nome do arquivo será o **id_pedido**.
 
-AWS Lambda (Python) - Processamento serverless de pedidos e envios.
+   Exemplo de JSON salvo no S3:
 
-Amazon DynamoDB - Armazena pedidos e informações de envio.
+   ```json
+   {
+     "produtos": [
+       {
+         "id_produto": "number",
+         "quantidade": "number"
+       },
+       {
+         "id_produto": "number",
+         "quantidade": "number"
+       }
+     ],
+     "url_transportadora": "string",
+     "nome_loja": "string"
+   }
+   ```
 
-Amazon SQS - Gerencia filas de pedidos e envios.
+---
 
-Amazon S3 - Armazena dados de pedidos e envios.
+## ENDPOINT - Transportadora
 
-Amazon RDS (MySQL) - Banco relacional para produtos.
+### Descrição
+O **Endpoint de Transportadora** processa as informações de transporte de um pedido. Após o recebimento do pedido, o sistema interage com a API de estoque para atualizar o estoque, realiza o transporte e armazena as informações no **DynamoDB** e no **S3**.
 
-Amazon ECS (Spring Boot) - Microserviço para CRUD de produtos.
+### Método: `POST`
+**URL:** `/transportadora`
 
+### Payload de Entrada:
+O payload enviado para o endpoint contém as informações dos produtos e o nome da loja associada ao pedido de transporte:
 
-Criado por Letícia ❤️ | 🔗 [@lettymoon](https://github.com/lettymoon) | 📧 [leticiahcandido@gmail.com](mailto:leticiahcandido@gmail.com) 
+```json
+{
+  "produtos": [
+    {
+      "id_produto": "number",
+      "quantidade": "number"
+    },
+    {
+      "id_produto": "number",
+      "quantidade": "number"
+    }
+  ],
+  "nome_loja": "string"
+}
+```
+
+#### Campos:
+
+- **produtos**: Lista de objetos representando os produtos que serão transportados.
+  - **id_produto**: Identificador único do produto.
+  - **quantidade**: Quantidade solicitada para o transporte do produto.
+
+- **nome_loja**: Nome da loja associada ao pedido de transporte.
+
+### Fluxo de Processamento:
+
+1. **Armazenamento no DynamoDB**:
+   Após a solicitação de transporte ser recebida, os dados do pedido são salvos no **DynamoDB** com a seguinte estrutura:
+
+### Estrutura de Armazenamento no DynamoDB
+
+| **Coluna**              | **Descrição**                                                                 |
+|-------------------------|-------------------------------------------------------------------------------|
+| **Id**                  | Identificador único para cada produto dentro de um pedido de transporte (string). |
+| **id_transporte**       | Identificador único do transporte, comum a todos os produtos de um mesmo pedido de transporte (string). |
+| **data_pedido**         | Data e hora em que o transporte foi solicitado (data).                       |
+| **id_produto**          | Identificador do produto.                                                   |
+| **nome_loja**           | Nome da loja associada ao pedido de transporte.                              |
+| **quantidade**          | Quantidade solicitada para o transporte do produto.                         |
+
+#### Exemplo de Registro no DynamoDB
+
+| **Id**       | **id_transporte**  | **data_pedido**         | **id_produto** | **nome_loja** | **quantidade** |
+|--------------|--------------------|-------------------------|----------------|---------------|----------------|
+| `001`        | `transporte_123`   | `2025-02-28T15:40:00Z`  | `101`          | `Adidas`      | `2`            |
+| `002`        | `transporte_123`   | `2025-02-28T15:40:00Z`  | `102`          | `Adidas`      | `1`            |
+
+2. **Fila SQS**:
+   Após o armazenamento no DynamoDB, uma mensagem é enviada para a fila **SQS** com os dados do transporte no seguinte formato:
+
+   ```json
+   {
+     "produtos": [
+       {
+         "id_produto": "number",
+         "quantidade": "number"
+       },
+       {
+         "id_produto": "number",
+         "quantidade": "number"
+       }
+     ],
+     "nome_loja": "string"
+   }
+   ```
+
+3. **Baixa no Estoque**:
+   Antes de finalizar o transporte, a função Lambda que processa a fila SQS envia uma requisição `PATCH` para a API de estoque. A URL é:
+
+   ```
+   http://url.com/estoque/{id_produto}
+   ```
+
+   O formato da requisição será:
+
+   ```json
+   {
+     "quantidade": "number"
+   }
+   ```
+
+   Onde **quantidade** é a quantidade do produto que está sendo removida do estoque.
+
+4. **Finalização do Transporte**:
+   Após a baixa no estoque ser confirmada, o transporte é finalizado.
+
+5. **Armazenamento no S3**:
+   Após a finalização do transporte, os dados do transporte, incluindo os produtos e o nome da loja, são salvos em um arquivo JSON no **S3**. O nome do arquivo será o **id_transporte**.
+
+   Exemplo de JSON salvo no S3:
+
+   ```json
+   {
+     "id_transporte": "string",
+     "produtos": [
+       { "id_produto": "number", "quantidade": "number" },
+       { "id_produto": "number", "quantidade": "number" }
+     ],
+     "nome_loja": "string"
+   }
+   ```
+
+---
+
+## Considerações Finais
+
+- **Endpoint de Pedido**:
+  - Recebe os dados do pedido, consulta a API de produtos, envia a requisição para a transportadora e armazena as informações no **DynamoDB** e no **S3**.
+  
+- **Endpoint de Transportadora**:
+  - Processa a solicitação de transporte, interage com a API de estoque para dar baixa nas quantidades de produtos e salva os dados no **DynamoDB** e no **S3**.
+
+- O sistema utiliza recursos como ***API Gateway**, **Lambda Function**, **DynamoDB**, **SQS** e **S3**, garantindo um fluxo eficiente de pedidos e transportes.
